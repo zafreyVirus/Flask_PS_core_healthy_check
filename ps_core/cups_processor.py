@@ -1,92 +1,65 @@
 import pandas as pd
+import matplotlib
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
 
 class CUPSProcessor:
+    """
+    Handles a single node CSV for CGW/DGW nodes:
+      llg_vcgw.csv, llg_vdgw.csv, lmb_vcgw.csv, lmb_vdgw.csv
+    Columns: Result Time, Object Name, CPU average usage, CPU max usage, CPU usage
+    """
 
     def __init__(self, file_path):
         self.file_path = file_path
         self.df = None
 
     def load_data(self):
-        """
-        Load Huawei U2020 CUPS CPU CSV by skipping metadata header rows
-        """
+        self.df = pd.read_csv(self.file_path)
+        self.df["Result Time"] = pd.to_datetime(self.df["Result Time"])
 
-        with open(self.file_path, "r", encoding="utf-8") as f:
-            lines = f.readlines()
-
-        header_line_index = None
-
-        for i, line in enumerate(lines):
-            if ("VM Name" in line or "\"VM\"" in line) and "CPU max usage" in line:
-                header_line_index = i
-                break
-
-        if header_line_index is None:
-            raise Exception("Could not find CPU data header in CSV")
-
-        self.df = pd.read_csv(
-            self.file_path,
-            skiprows=header_line_index,
-            engine="python"
+        # Extract short VM name from Object Name
+        self.df["VM Name"] = self.df["Object Name"].str.extract(
+            r"VM Name=(.+)$"
         )
-
-        # Normalise column names
-        self.df.rename(columns={
-            "Start Time": "Time",
-            "VM": "VM Name",
-        }, inplace=True)
-
-        # Convert time column
-        self.df["Time"] = pd.to_datetime(self.df["Time"])
-
         return self.df
 
-    def plot_node(self, ne_name, output_file, title):
+    def plot_cpu_usage(self, output_file, title):
         """
-        Filter by NE Name and generate a CPU line chart per VM
+        Plot CPU max usage per VM over time.
+        Uses latest 3 days of data automatically.
+        No node filtering needed — each file is already one node.
         """
+        df = self.df.copy()
 
-        node_df = self.df[self.df["NE Name"] == ne_name].copy()
+        # Filter to latest 3 days
+        latest = df["Result Time"].max()
+        cutoff = latest - pd.Timedelta(days=3)
+        df = df[df["Result Time"] >= cutoff]
 
-        if node_df.empty:
-            raise Exception(f"No data found for NE Name: {ne_name}")
-
-        pivot = node_df.pivot_table(
-            index="Time",
+        pivot = df.pivot_table(
+            index="Result Time",
             columns="VM Name",
-            values="CPU max usage (%)"
+            values="CPU max usage",
+            aggfunc="mean"
         )
+
+        colors = [
+            "red", "brown", "green", "purple", "orange",
+            "black", "blue", "pink", "cyan", "magenta", "olive", "teal"
+        ]
 
         plt.figure(figsize=(24, 6))
 
-        colors = [
-            "red",
-            "brown",
-            "green",
-            "purple",
-            "orange",
-            "black",
-            "blue",
-            "pink",
-            "cyan",
-            "magenta",
-            "olive",
-            "teal"
-        ]
-
         for i, vm in enumerate(pivot.columns):
-
-            color = colors[i % len(colors)]
-
             plt.plot(
                 pivot.index,
                 pivot[vm],
-                color=color,
+                color=colors[i % len(colors)],
                 linewidth=2,
-                marker='o',
-                markerfacecolor='white',
+                marker="o",
+                markerfacecolor="white",
                 markeredgewidth=2,
                 label=vm
             )
@@ -94,21 +67,14 @@ class CUPSProcessor:
         plt.title(title)
         plt.xlabel("Time")
         plt.ylabel("CPU Max Usage (%)")
-
         plt.legend(
             loc="upper left",
             bbox_to_anchor=(1.01, 1),
             borderaxespad=0,
             fontsize=8
         )
-        plt.subplots_adjust(right=0.65)
-
         plt.grid(True)
-
         plt.xticks(rotation=45)
-
         plt.tight_layout(rect=[0, 0, 0.65, 1])
-
         plt.savefig(output_file)
-
         plt.close()

@@ -1,3 +1,6 @@
+import matplotlib
+matplotlib.use("Agg")
+
 import os
 import tempfile
 import traceback
@@ -22,16 +25,23 @@ app = Flask(__name__)
 
 # ─── Config ───────────────────────────────────────────────────────────────────
 
-BASE_DIR = os.path.join(os.path.dirname(__file__), "ps_core")
+PS_CORE_DIR = os.path.join(os.path.dirname(__file__), "ps_core")
+CPU_DIR     = "/home/u2020/NBI_PM/pm"
 
 DATA_FILES = {
-    "traffic":    os.path.join(BASE_DIR, "PS Data traffic LMB.csv"),
-    "cpu_llg":    os.path.join(BASE_DIR, "USN_CPU_LLG.csv"),
-    "cpu_lmb":    os.path.join(BASE_DIR, "USN_CPU_LMB.csv"),
-    "cups":       os.path.join(BASE_DIR, "ugw.csv"),
-    "usn_alarms": os.path.join(BASE_DIR, "USN.csv"),
-    "cgw_alarms": os.path.join(BASE_DIR, "cgw.csv"),
-    "dgw_alarms": os.path.join(BASE_DIR, "dgw.csv"),
+    # Traffic & alarms — still in ps_core (dummy for now, real later)
+    "traffic":    os.path.join(PS_CORE_DIR, "PS Data traffic LMB.csv"),
+    "usn_alarms": os.path.join(PS_CORE_DIR, "USN.csv"),
+    "cgw_alarms": os.path.join(PS_CORE_DIR, "cgw.csv"),
+    "dgw_alarms": os.path.join(PS_CORE_DIR, "dgw.csv"),
+
+    # Real CPU data from extractor
+    "cloudusn":   os.path.join(CPU_DIR, "cloudusn.csv"),
+    "lmb_vusn":   os.path.join(CPU_DIR, "lmb_vusn.csv"),
+    "llg_vcgw":   os.path.join(CPU_DIR, "llg_vcgw.csv"),
+    "llg_vdgw":   os.path.join(CPU_DIR, "llg_vdgw.csv"),
+    "lmb_vcgw":   os.path.join(CPU_DIR, "lmb_vcgw.csv"),
+    "lmb_vdgw":   os.path.join(CPU_DIR, "lmb_vdgw.csv"),
 }
 
 CAPACITY_MB = 20_000_000
@@ -59,7 +69,8 @@ def evaluate_health(max_value, capacity):
 # ─── Core report logic ────────────────────────────────────────────────────────
 
 def generate_report(tmp_dir):
-    # Traffic
+
+    # ── Traffic ───────────────────────────────────────────────────────────────
     processor = DataProcessor(DATA_FILES["traffic"])
     processor.load_data()
 
@@ -82,7 +93,7 @@ def generate_report(tmp_dir):
             "Health Status":        status,
         }
 
-    # Traffic charts
+    # ── Traffic charts ────────────────────────────────────────────────────────
     chart_gi  = os.path.join(tmp_dir, "chart_gi.png")
     chart_4g  = os.path.join(tmp_dir, "chart_4g.png")
     chart_gn  = os.path.join(tmp_dir, "chart_gn.png")
@@ -96,32 +107,41 @@ def generate_report(tmp_dir):
         chart_sgi
     )
 
-    # USN CPU charts
-    cpu_llg_path = os.path.join(tmp_dir, "cpu_llg.png")
-    cpu_lmb_path = os.path.join(tmp_dir, "cpu_lmb.png")
+    # ── USN CPU charts (real data) ────────────────────────────────────────────
+    cpu_cloudusn_path = os.path.join(tmp_dir, "cpu_cloudusn.png")
+    cpu_lmb_vusn_path = os.path.join(tmp_dir, "cpu_lmb_vusn.png")
 
-    cpu_llg = CPUProcessor(DATA_FILES["cpu_llg"])
-    cpu_llg.load_data()
-    cpu_llg.plot_cpu_usage(cpu_llg_path, "LLG USN CPU Usage")
+    cpu_cloudusn = CPUProcessor(DATA_FILES["cloudusn"])
+    cpu_cloudusn.load_data()
+    cpu_cloudusn.plot_cpu_usage(cpu_cloudusn_path, "CLOUDUSN CPU Usage")
 
-    cpu_lmb = CPUProcessor(DATA_FILES["cpu_lmb"])
-    cpu_lmb.load_data()
-    cpu_lmb.plot_cpu_usage(cpu_lmb_path, "LMB USN CPU Usage")
+    cpu_lmb_vusn = CPUProcessor(DATA_FILES["lmb_vusn"])
+    cpu_lmb_vusn.load_data()
+    cpu_lmb_vusn.plot_cpu_usage(cpu_lmb_vusn_path, "LMB vUSN01 CPU Usage")
 
-    # CUPS CPU charts
-    cups_lmb_cgw = os.path.join(tmp_dir, "cups_lmb_cgw.png")
-    cups_lmb_dgw = os.path.join(tmp_dir, "cups_lmb_dgw.png")
-    cups_llg_cgw = os.path.join(tmp_dir, "cups_llg_cgw.png")
-    cups_llg_dgw = os.path.join(tmp_dir, "cups_llg_dgw.png")
+    # ── CUPS CPU charts (real data) ───────────────────────────────────────────
+    cups_llg_vcgw_path = os.path.join(tmp_dir, "cups_llg_vcgw.png")
+    cups_llg_vdgw_path = os.path.join(tmp_dir, "cups_llg_vdgw.png")
+    cups_lmb_vcgw_path = os.path.join(tmp_dir, "cups_lmb_vcgw.png")
+    cups_lmb_vdgw_path = os.path.join(tmp_dir, "cups_lmb_vdgw.png")
 
-    cups = CUPSProcessor(DATA_FILES["cups"])
-    cups.load_data()
-    cups.plot_node("LMB_vCGW01", cups_lmb_cgw, "LMB CGW CPU Usage")
-    cups.plot_node("LMB_vDGW01", cups_lmb_dgw, "LMB DGW CPU Usage")
-    cups.plot_node("LLG_vCGW01", cups_llg_cgw, "LLG CGW CPU Usage")
-    cups.plot_node("LLG_vDGW01", cups_llg_dgw, "LLG DGW CPU Usage")
+    cups_llg_vcgw = CUPSProcessor(DATA_FILES["llg_vcgw"])
+    cups_llg_vcgw.load_data()
+    cups_llg_vcgw.plot_cpu_usage(cups_llg_vcgw_path, "LLG vCGW01 CPU Usage")
 
-    # Alarms
+    cups_llg_vdgw = CUPSProcessor(DATA_FILES["llg_vdgw"])
+    cups_llg_vdgw.load_data()
+    cups_llg_vdgw.plot_cpu_usage(cups_llg_vdgw_path, "LLG vDGW01 CPU Usage")
+
+    cups_lmb_vcgw = CUPSProcessor(DATA_FILES["lmb_vcgw"])
+    cups_lmb_vcgw.load_data()
+    cups_lmb_vcgw.plot_cpu_usage(cups_lmb_vcgw_path, "LMB vCGW01 CPU Usage")
+
+    cups_lmb_vdgw = CUPSProcessor(DATA_FILES["lmb_vdgw"])
+    cups_lmb_vdgw.load_data()
+    cups_lmb_vdgw.plot_cpu_usage(cups_lmb_vdgw_path, "LMB vDGW01 CPU Usage")
+
+    # ── Alarms ────────────────────────────────────────────────────────────────
     alarms = AlarmProcessor(DATA_FILES["usn_alarms"])
     alarms.load_data()
     usn_alarms = [
@@ -142,15 +162,18 @@ def generate_report(tmp_dir):
         ("LMB DGW Alarms (LMB_vDGW01)", dgw_alarms.get_by_source("LMB_vDGW01")),
     ]
 
-    # Build Excel
+    # ── Build Excel ───────────────────────────────────────────────────────────
     excel_path = os.path.join(tmp_dir, "PS_Core_Health_Report.xlsx")
     excel = ExcelReport("Fraser Msusa")
     excel.create_report(
         traffic_charts=[chart_gi, chart_4g, chart_gn, chart_sgi],
-        cpu_charts=[cpu_llg_path, cpu_lmb_path],
+        cpu_charts=[cpu_cloudusn_path, cpu_lmb_vusn_path],
         health_report=health_report,
         output_file=excel_path,
-        cups_charts=[cups_lmb_cgw, cups_lmb_dgw, cups_llg_cgw, cups_llg_dgw],
+        cups_charts=[
+            cups_llg_vcgw_path, cups_llg_vdgw_path,
+            cups_lmb_vcgw_path, cups_lmb_vdgw_path
+        ],
         usn_alarms=usn_alarms,
         ugw_alarms=ugw_alarms,
     )
@@ -158,7 +181,7 @@ def generate_report(tmp_dir):
     return health_report, start_date, end_date, excel_path
 
 
-# ─── Shared run function (used by both direct run and Flask route) ─────────────
+# ─── Shared run function ──────────────────────────────────────────────────────
 
 def run_report_and_email():
     sender_email    = os.environ.get("SENDER_EMAIL")
@@ -179,7 +202,7 @@ def run_report_and_email():
     return start_date, end_date
 
 
-# ─── Flask route (for future automation / server trigger) ─────────────────────
+# ─── Flask routes ─────────────────────────────────────────────────────────────
 
 @app.route("/", methods=["GET"])
 def index():
@@ -209,7 +232,6 @@ def generate_report_endpoint():
 # ─── Entry point ──────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
-    # Run report and send email immediately on startup
     try:
         run_report_and_email()
     except Exception as e:
@@ -217,6 +239,5 @@ if __name__ == "__main__":
         traceback.print_exc()
         sys.exit(1)
 
-    # Then start the Flask server (ready for future scheduling/automation)
     print("\n[INFO] Starting Flask server...")
     app.run(debug=False, host="0.0.0.0", port=5000)
