@@ -26,32 +26,28 @@ app = Flask(__name__)
 
 PS_CORE_DIR = os.path.join(os.path.dirname(__file__), "ps_core")
 PM_DIR      = "/home/u2020/NBI_PM/pm"
+FM_DIR      = "/home/u2020/NBI_FM"
 
 DATA_FILES = {
-    # Real traffic data from extractor
+    # Real traffic data
     "traffic_llg": os.path.join(PM_DIR, "PS Data traffic.csv"),
     "traffic_lmb": os.path.join(PM_DIR, "PS Data traffic LMB.csv"),
 
-    # Real CPU data from extractor
-    "cloudusn":    os.path.join(PM_DIR, "cloudusn.csv"),
-    "lmb_vusn":   os.path.join(PM_DIR, "lmb_vusn.csv"),
-    "llg_vcgw":   os.path.join(PM_DIR, "llg_vcgw.csv"),
-    "llg_vdgw":   os.path.join(PM_DIR, "llg_vdgw.csv"),
-    "lmb_vcgw":   os.path.join(PM_DIR, "lmb_vcgw.csv"),
-    "lmb_vdgw":   os.path.join(PM_DIR, "lmb_vdgw.csv"),
-
-    # Alarms — still dummy for now
-    "usn_alarms":  os.path.join(PS_CORE_DIR, "USN.csv"),
-    "cgw_alarms":  os.path.join(PS_CORE_DIR, "cgw.csv"),
-    "dgw_alarms":  os.path.join(PS_CORE_DIR, "dgw.csv"),
+    # Real CPU data
+    "cloudusn":  os.path.join(PM_DIR, "cloudusn.csv"),
+    "lmb_vusn":  os.path.join(PM_DIR, "lmb_vusn.csv"),
+    "llg_vcgw":  os.path.join(PM_DIR, "llg_vcgw.csv"),
+    "llg_vdgw":  os.path.join(PM_DIR, "llg_vdgw.csv"),
+    "lmb_vcgw":  os.path.join(PM_DIR, "lmb_vcgw.csv"),
+    "lmb_vdgw":  os.path.join(PM_DIR, "lmb_vdgw.csv"),
 }
 
-# Traffic column names in the real data (MB after conversion)
+# Traffic KPI column names (MB after conversion)
 TRAFFIC_COLS = {
-    "downlink_mb":    "User Plane SGi downlink user traffic in MB",
-    "downlink_peak":  "User Plane SGi downlink user traffic peak throughput in MB/s",
-    "uplink_mb":      "User Plane SGi uplink user traffic in MB",
-    "uplink_peak":    "User Plane SGi uplink user traffic peak throughput in MB/s",
+    "downlink_mb":   "User Plane SGi downlink user traffic in MB",
+    "downlink_peak": "User Plane SGi downlink user traffic peak throughput in MB/s (MB/s)",
+    "uplink_mb":     "User Plane SGi uplink user traffic in MB",
+    "uplink_peak":   "User Plane SGi uplink user traffic peak throughput in MB/s",
 }
 
 CAPACITY_MB = 20_000_000
@@ -60,7 +56,6 @@ CAPACITY_MB = 20_000_000
 # ─── Helpers ──────────────────────────────────────────────────────────────────
 
 def get_latest_date_range(df, days=3):
-    """Return (start_date, end_date) strings covering the latest `days` days."""
     latest   = df["Start Time"].max()
     earliest = latest - timedelta(days=days - 1)
     return earliest.strftime("%Y-%m-%d"), latest.strftime("%Y-%m-%d")
@@ -78,10 +73,6 @@ def evaluate_health(max_value, capacity):
 
 
 def load_combined_traffic():
-    """
-    Load and combine LLG + LMB traffic CSVs into one DataProcessor.
-    Both files have the same columns so we just concatenate.
-    """
     proc_llg = DataProcessor(DATA_FILES["traffic_llg"])
     proc_llg.load_data()
 
@@ -92,7 +83,6 @@ def load_combined_traffic():
     combined = DataProcessor.__new__(DataProcessor)
     combined.file_path = None
     combined.df = pd.concat([proc_llg.df, proc_lmb.df], ignore_index=True)
-
     return combined
 
 
@@ -100,16 +90,14 @@ def load_combined_traffic():
 
 def generate_report(tmp_dir):
 
-    # ── Load combined traffic ─────────────────────────────────────────────────
+    # ── Traffic ───────────────────────────────────────────────────────────────
     processor = load_combined_traffic()
-
     start_date, end_date = get_latest_date_range(processor.df, days=3)
     print(f"[INFO] Report period: {start_date} to {end_date}")
 
     processor.filter_by_date(start_date, end_date)
 
-    # Use downlink MB as the primary health KPI
-    primary_col = TRAFFIC_COLS["downlink_mb"]
+    primary_col = "4G Data traffic VDGW(CLOUD) (MB)"
     summary = processor.calculate_summary(primary_col)
 
     health_report = {}
@@ -126,15 +114,15 @@ def generate_report(tmp_dir):
         }
 
     # ── Traffic charts ────────────────────────────────────────────────────────
-    chart_downlink      = os.path.join(tmp_dir, "chart_downlink.png")
-    chart_downlink_peak = os.path.join(tmp_dir, "chart_downlink_peak.png")
-    chart_uplink        = os.path.join(tmp_dir, "chart_uplink.png")
-    chart_uplink_peak   = os.path.join(tmp_dir, "chart_uplink_peak.png")
+    chart_4g         = os.path.join(tmp_dir, "chart_4g.png")
+    chart_sgi_peak   = os.path.join(tmp_dir, "chart_sgi_peak.png")
+    chart_gi         = os.path.join(tmp_dir, "chart_gi.png")
+    chart_gn         = os.path.join(tmp_dir, "chart_gn.png")
 
-    processor.plot_kpi(TRAFFIC_COLS["downlink_mb"],   chart_downlink)
-    processor.plot_kpi(TRAFFIC_COLS["downlink_peak"], chart_downlink_peak)
-    processor.plot_kpi(TRAFFIC_COLS["uplink_mb"],     chart_uplink)
-    processor.plot_kpi(TRAFFIC_COLS["uplink_peak"],   chart_uplink_peak)
+    processor.plot_kpi("4G Data traffic VDGW(CLOUD) (MB)",                        chart_4g)
+    processor.plot_kpi("User Plane SGi downlink user traffic peak throughput in MB/s (MB/s)", chart_sgi_peak)
+    processor.plot_kpi("PGW-U 2/3G Gi traffic in MB (MB)",                        chart_gi)
+    processor.plot_kpi("PGW-U 2/3G Gn peak throughput in MB/s (MB/s)",            chart_gn)
 
     # ── USN CPU charts ────────────────────────────────────────────────────────
     cpu_cloudusn_path = os.path.join(tmp_dir, "cpu_cloudusn.png")
@@ -170,35 +158,42 @@ def generate_report(tmp_dir):
     cups_lmb_vdgw.load_data()
     cups_lmb_vdgw.plot_cpu_usage(cups_lmb_vdgw_path, "LMB vDGW01 CPU Usage")
 
-    # ── Alarms ────────────────────────────────────────────────────────────────
-    alarms = AlarmProcessor(DATA_FILES["usn_alarms"])
-    alarms.load_data()
+    # ── Alarms (real data from alarm_extractor) ───────────────────────────────
+    usn_cloudusn = AlarmProcessor("alarm_CLOUDUSN")
+    usn_cloudusn.load_data()
+
+    usn_lmb = AlarmProcessor("alarm_LMB_vUSN")
+    usn_lmb.load_data()
+
     usn_alarms = [
-        ("LLG USN Alarms (CLOUDUSN)",   alarms.get_llg_alarms()),
-        ("LMB USN Alarms (LMB_vUSN01)", alarms.get_lmb_alarms()),
+        ("LLG USN Alarms (CLOUDUSN)",   usn_cloudusn.get_alarms()),
+        ("LMB USN Alarms (LMB_vUSN01)", usn_lmb.get_alarms()),
     ]
 
-    cgw_alarms = AlarmProcessor(DATA_FILES["cgw_alarms"])
-    cgw_alarms.load_data()
+    llg_vcgw_alarms = AlarmProcessor("alarm_LLG_vCGW")
+    llg_vcgw_alarms.load_data()
 
-    dgw_alarms = AlarmProcessor(DATA_FILES["dgw_alarms"])
-    dgw_alarms.load_data()
+    llg_vdgw_alarms = AlarmProcessor("alarm_LLG_vDGW")
+    llg_vdgw_alarms.load_data()
+
+    lmb_vcgw_alarms = AlarmProcessor("alarm_LMB_vCGW")
+    lmb_vcgw_alarms.load_data()
+
+    lmb_vdgw_alarms = AlarmProcessor("alarm_LMB_vDGW")
+    lmb_vdgw_alarms.load_data()
 
     ugw_alarms = [
-        ("LLG CGW Alarms (LLG_vCGW01)", cgw_alarms.get_by_source("LLG_vCGW01")),
-        ("LMB CGW Alarms (LMB_vCGW01)", cgw_alarms.get_by_source("LMB_vCGW01")),
-        ("LLG DGW Alarms (LLG_vDGW01)", dgw_alarms.get_by_source("LLG_vDGW01")),
-        ("LMB DGW Alarms (LMB_vDGW01)", dgw_alarms.get_by_source("LMB_vDGW01")),
+        ("LLG CGW Alarms (LLG_vCGW01)", llg_vcgw_alarms.get_alarms()),
+        ("LMB CGW Alarms (LMB_vCGW01)", lmb_vcgw_alarms.get_alarms()),
+        ("LLG DGW Alarms (LLG_vDGW01)", llg_vdgw_alarms.get_alarms()),
+        ("LMB DGW Alarms (LMB_vDGW01)", lmb_vdgw_alarms.get_alarms()),
     ]
 
     # ── Build Excel ───────────────────────────────────────────────────────────
     excel_path = os.path.join(tmp_dir, "PS_Core_Health_Report.xlsx")
     excel = ExcelReport("Fraser Msusa")
     excel.create_report(
-        traffic_charts=[
-            chart_downlink, chart_downlink_peak,
-            chart_uplink,   chart_uplink_peak
-        ],
+        traffic_charts=[chart_4g, chart_sgi_peak, chart_gi, chart_gn],
         cpu_charts=[cpu_cloudusn_path, cpu_lmb_vusn_path],
         health_report=health_report,
         output_file=excel_path,
