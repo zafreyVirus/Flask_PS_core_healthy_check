@@ -7,20 +7,18 @@ from datetime import datetime
 
 # ─── Config ───────────────────────────────────────────────────────────────────
 
-FM_DIR    = "/home/u2020/NBI_FM"
-OUT_DIR   = "/home/u2020/NBI_FM"
+FM_DIR  = "/home/u2020/NBI_FM"
+OUT_DIR = "/home/u2020/NBI_FM"
 
-# 6 output files — overwritten fresh every run
 OUTPUT_FILES = {
-    "alarm_LMB_vUSN":  os.path.join(OUT_DIR, "alarm_LMB_vUSN.csv"),
-    "alarm_CLOUDUSN":  os.path.join(OUT_DIR, "alarm_CLOUDUSN.csv"),
-    "alarm_LLG_vCGW":  os.path.join(OUT_DIR, "alarm_LLG_vCGW.csv"),
-    "alarm_LLG_vDGW":  os.path.join(OUT_DIR, "alarm_LLG_vDGW.csv"),
-    "alarm_LMB_vCGW":  os.path.join(OUT_DIR, "alarm_LMB_vCGW.csv"),
-    "alarm_LMB_vDGW":  os.path.join(OUT_DIR, "alarm_LMB_vDGW.csv"),
+    "alarm_LMB_vUSN": os.path.join(OUT_DIR, "alarm_LMB_vUSN.csv"),
+    "alarm_CLOUDUSN": os.path.join(OUT_DIR, "alarm_CLOUDUSN.csv"),
+    "alarm_LLG_vCGW": os.path.join(OUT_DIR, "alarm_LLG_vCGW.csv"),
+    "alarm_LLG_vDGW": os.path.join(OUT_DIR, "alarm_LLG_vDGW.csv"),
+    "alarm_LMB_vCGW": os.path.join(OUT_DIR, "alarm_LMB_vCGW.csv"),
+    "alarm_LMB_vDGW": os.path.join(OUT_DIR, "alarm_LMB_vDGW.csv"),
 }
 
-# Filter rules: output_key → (Alarm Source, NEType)
 FILTERS = {
     "alarm_LMB_vUSN": ("LMB_vUSN01",  "vUSN"),
     "alarm_CLOUDUSN": ("CLOUDUSN",    "vUSN"),
@@ -30,23 +28,46 @@ FILTERS = {
     "alarm_LMB_vDGW": ("LMB_vDGW01", "vUGW"),
 }
 
+# Unique alarm key columns
+KEY_COLS = ["Alarm ID", "Alarm Source"]
 
-# ─── Helpers ──────────────────────────────────────────────────────────────────
+
+# ─── Status helpers ───────────────────────────────────────────────────────────
+
+def is_active(status_value):
+    """
+    Returns True if the alarm is still active.
+    Active = status contains 'unacknowledged' OR 'uncleared' (case-insensitive).
+    """
+    s = str(status_value).lower().strip()
+    return "unacknowledged" in s or "uncleared" in s
+
+
+def is_cleared(status_value):
+    """
+    Returns True if the alarm is cleared.
+    Cleared = status contains 'cleared' but NOT 'uncleared'.
+    """
+    s = str(status_value).lower().strip()
+    return "cleared" in s and "uncleared" not in s
+
+
+def make_key(row):
+    """Create a unique string key from Alarm ID + Alarm Source."""
+    return f"{str(row.get('Alarm ID', '')).strip()}|{str(row.get('Alarm Source', '')).strip()}"
+
+
+# ─── File helpers ─────────────────────────────────────────────────────────────
 
 def read_alarm_csv(filepath):
     """
-    Read an alarm CSV file. Handles both:
-    - New format: standard CSV with header on row 0
-    - Old U2020 format: metadata rows before the real header
-    Returns a DataFrame or None on failure.
+    Read an alarm CSV. Handles standard format and buried-header format.
+    Returns DataFrame or None.
     """
     try:
-        # First try reading directly
         df = pd.read_csv(filepath, on_bad_lines="skip")
 
-        # Check if the real header is in the file but buried
-        if "Alarm Source" not in df.columns and "NEType" not in df.columns:
-            # Search for the header row
+        if "Alarm Source" not in df.columns or "NEType" not in df.columns:
             with open(filepath, "r", encoding="utf-8-sig", errors="replace") as f:
                 lines = f.readlines()
 
@@ -70,8 +91,25 @@ def read_alarm_csv(filepath):
         return None
 
 
+def load_existing(out_path):
+    """Load existing alarm CSV into a dict keyed by alarm key."""
+    if not os.path.exists(out_path) or os.path.getsize(out_path) == 0:
+        return {}
+    try:
+        df = pd.read_csv(out_path)
+        if df.empty or "Alarm ID" not in df.columns:
+            return {}
+        existing = {}
+        for _, row in df.iterrows():
+            key = make_key(row)
+            existing[key] = row.to_dict()
+        return existing
+    except Exception:
+        return {}
+
+
 def extract_zip(zip_path, extract_to):
-    """Unzip a file into a target directory. Returns list of extracted file paths."""
+    """Unzip into a target directory. Returns list of extracted file paths."""
     extracted = []
     try:
         with zipfile.ZipFile(zip_path, "r") as z:
@@ -82,13 +120,53 @@ def extract_zip(zip_path, extract_to):
     return extracted
 
 
+# ─── Core merge logic ─────────────────────────────────────────────────────────
+
+def merge_alarms(existing_dict, new_df):
+    """
+    Merge new alarm data into existing alarm dict.
+
+    Rules:
+    - New alarm (key not in existing) AND active → ADD
+    - Existing alarm seen in new data AND still active → UPDATE row
+    - Existing alarm seen in new data AND now cleared → REMOVE immediately
+    - Existing alarm NOT seen in new data at all → KEEP (still active on system)
+
+    Returns updated dict of active alarms.
+    """
+    # Build a dict of new alarms keyed by alarm key
+    new_dict = {}
+    for _, row in new_df.iterrows():
+        key = make_key(row)
+        if key:
+            new_dict[key] = row.to_dict()
+
+    result = dict(existing_dict)  # start from existing
+
+    for key, new_row in new_dict.items():
+        status = new_row.get("Status", "")
+
+        if is_cleared(status):
+            # Alarm explicitly cleared → remove from active list
+            if key in result:
+                result.pop(key)
+                print(f"    [CLEARED] Removed: {key}")
+        elif is_active(status):
+            if key not in result:
+                # Brand new alarm
+                result[key] = new_row
+                print(f"    [NEW]     Added:   {key}")
+            else:
+                # Existing alarm — update with latest data
+                result[key] = new_row
+
+    return result
+
+
 # ─── Main ─────────────────────────────────────────────────────────────────────
 
 def main():
     print(f"\n[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Starting alarm extraction...")
-
-    # Accumulated data per output key across all folders and files
-    accumulated = {key: [] for key in OUTPUT_FILES}
 
     # Find all dated folders e.g. 20260429, 20260430
     date_folders = sorted([
@@ -97,75 +175,89 @@ def main():
     ])
 
     if not date_folders:
-        print("[INFO] No dated alarm folders found.")
-    else:
-        for date_folder in date_folders:
-            folder_name = os.path.basename(date_folder)
-            print(f"[INFO] Processing {folder_name}...")
+        print("[INFO] No new alarm folders found — existing alarm files kept untouched.")
+        return
 
-            zip_files = glob.glob(os.path.join(date_folder, "*.zip"))
+    # Accumulate new alarm data per output key from all zips
+    new_data = {key: [] for key in OUTPUT_FILES}
 
-            if not zip_files:
-                print(f"  → No zip files found in {folder_name}")
-            else:
-                # Use a temp dir to extract zips
-                tmp_dir = os.path.join(date_folder, "_tmp_extract")
-                os.makedirs(tmp_dir, exist_ok=True)
+    for date_folder in date_folders:
+        folder_name = os.path.basename(date_folder)
+        print(f"[INFO] Processing {folder_name}...")
 
-                for zip_path in zip_files:
-                    extracted_files = extract_zip(zip_path, tmp_dir)
+        zip_files = glob.glob(os.path.join(date_folder, "*.zip"))
 
-                    for extracted_file in extracted_files:
-                        if not extracted_file.lower().endswith(".csv"):
-                            continue
+        if not zip_files:
+            print(f"  → No zip files in {folder_name}")
+        else:
+            tmp_dir = os.path.join(date_folder, "_tmp_extract")
+            os.makedirs(tmp_dir, exist_ok=True)
 
-                        df = read_alarm_csv(extracted_file)
-                        if df is None or df.empty:
-                            continue
+            for zip_path in zip_files:
+                extracted_files = extract_zip(zip_path, tmp_dir)
 
-                        # Check required columns exist
-                        if "Alarm Source" not in df.columns or "NEType" not in df.columns:
-                            print(f"  [WARN] Missing Alarm Source/NEType in {os.path.basename(extracted_file)}")
-                            continue
+                for extracted_file in extracted_files:
+                    if not extracted_file.lower().endswith(".csv"):
+                        continue
 
-                        # Filter for each node
-                        for key, (alarm_source, ne_type) in FILTERS.items():
-                            mask = (
-                                (df["Alarm Source"].astype(str).str.strip() == alarm_source) &
-                                (df["NEType"].astype(str).str.strip() == ne_type)
-                            )
-                            matched = df[mask]
-                            if not matched.empty:
-                                accumulated[key].append(matched)
+                    df = read_alarm_csv(extracted_file)
+                    if df is None or df.empty:
+                        continue
 
-                # Clean up temp extraction dir
-                shutil.rmtree(tmp_dir, ignore_errors=True)
+                    if "Alarm Source" not in df.columns or "NEType" not in df.columns:
+                        print(f"  [WARN] Missing columns in {os.path.basename(extracted_file)}")
+                        continue
 
-            # Delete the dated folder after processing
-            try:
-                shutil.rmtree(date_folder)
-                print(f"[INFO] Deleted {date_folder}")
-            except Exception as e:
-                print(f"[WARN] Could not delete {date_folder}: {e}")
+                    for key, (alarm_source, ne_type) in FILTERS.items():
+                        mask = (
+                            (df["Alarm Source"].astype(str).str.strip() == alarm_source) &
+                            (df["NEType"].astype(str).str.strip() == ne_type)
+                        )
+                        matched = df[mask]
+                        if not matched.empty:
+                            new_data[key].append(matched)
 
-    # Write output files — overwrite fresh every run
-    print("\n[INFO] Writing output alarm files...")
-    for key, frames in accumulated.items():
+            shutil.rmtree(tmp_dir, ignore_errors=True)
+
+        # Delete dated folder after processing
+        try:
+            shutil.rmtree(date_folder)
+            print(f"[INFO] Deleted {date_folder}")
+        except Exception as e:
+            print(f"[WARN] Could not delete {date_folder}: {e}")
+
+    # ── Merge new data with existing alarm files ───────────────────────────────
+    print("\n[INFO] Merging alarms...")
+
+    for key, frames in new_data.items():
         out_path = OUTPUT_FILES[key]
+        label    = os.path.basename(out_path)
 
-        if frames:
-            df_out = pd.concat(frames, ignore_index=True)
-            # Remove duplicate rows
-            df_out = df_out.drop_duplicates()
-            # Sort by OccurrenceTime if available
+        # Load what we currently have on disk
+        existing_dict = load_existing(out_path)
+
+        if not frames:
+            # No new data for this node — keep existing file untouched
+            print(f"  → {label}: no new data — {len(existing_dict)} existing alarm(s) kept")
+            continue
+
+        # Combine all new frames for this node
+        new_df = pd.concat(frames, ignore_index=True).drop_duplicates()
+
+        # Merge
+        updated_dict = merge_alarms(existing_dict, new_df)
+
+        # Write updated active alarms to file
+        if updated_dict:
+            df_out = pd.DataFrame(list(updated_dict.values()))
             if "OccurrenceTime" in df_out.columns:
                 df_out = df_out.sort_values("OccurrenceTime")
             df_out.to_csv(out_path, index=False)
-            print(f"  → {os.path.basename(out_path)}: {len(df_out)} rows")
+            print(f"  → {label}: {len(df_out)} active alarm(s)")
         else:
-            # Write empty file with no data
+            # All alarms cleared — write empty file
             pd.DataFrame().to_csv(out_path, index=False)
-            print(f"  → {os.path.basename(out_path)}: no matching alarms")
+            print(f"  → {label}: all alarms cleared")
 
     print("[INFO] Alarm extraction complete.")
 
