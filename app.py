@@ -19,6 +19,7 @@ from cups_processor import CUPSProcessor
 from alarm_processor import AlarmProcessor
 from excel_report import ExcelReport
 from emailer import EmailReport
+from pdp_chart_generator import generate_pdp_charts
 
 app = Flask(__name__)
 
@@ -29,25 +30,14 @@ PM_DIR      = "/home/u2020/NBI_PM/pm"
 FM_DIR      = "/home/u2020/NBI_FM"
 
 DATA_FILES = {
-    # Real traffic data
     "traffic_llg": os.path.join(PM_DIR, "PS Data traffic.csv"),
     "traffic_lmb": os.path.join(PM_DIR, "PS Data traffic LMB.csv"),
-
-    # Real CPU data
-    "cloudusn":  os.path.join(PM_DIR, "cloudusn.csv"),
-    "lmb_vusn":  os.path.join(PM_DIR, "lmb_vusn.csv"),
-    "llg_vcgw":  os.path.join(PM_DIR, "llg_vcgw.csv"),
-    "llg_vdgw":  os.path.join(PM_DIR, "llg_vdgw.csv"),
-    "lmb_vcgw":  os.path.join(PM_DIR, "lmb_vcgw.csv"),
-    "lmb_vdgw":  os.path.join(PM_DIR, "lmb_vdgw.csv"),
-}
-
-# Traffic KPI column names (MB after conversion)
-TRAFFIC_COLS = {
-    "downlink_mb":   "User Plane SGi downlink user traffic in MB",
-    "downlink_peak": "User Plane SGi downlink user traffic peak throughput in MB/s (MB/s)",
-    "uplink_mb":     "User Plane SGi uplink user traffic in MB",
-    "uplink_peak":   "User Plane SGi uplink user traffic peak throughput in MB/s",
+    "cloudusn":    os.path.join(PM_DIR, "cloudusn.csv"),
+    "lmb_vusn":   os.path.join(PM_DIR, "lmb_vusn.csv"),
+    "llg_vcgw":   os.path.join(PM_DIR, "llg_vcgw.csv"),
+    "llg_vdgw":   os.path.join(PM_DIR, "llg_vdgw.csv"),
+    "lmb_vcgw":   os.path.join(PM_DIR, "lmb_vcgw.csv"),
+    "lmb_vdgw":   os.path.join(PM_DIR, "lmb_vdgw.csv"),
 }
 
 CAPACITY_MB = 20_000_000
@@ -73,13 +63,11 @@ def evaluate_health(max_value, capacity):
 
 
 def load_combined_traffic():
+    import pandas as pd
     proc_llg = DataProcessor(DATA_FILES["traffic_llg"])
     proc_llg.load_data()
-
     proc_lmb = DataProcessor(DATA_FILES["traffic_lmb"])
     proc_lmb.load_data()
-
-    import pandas as pd
     combined = DataProcessor.__new__(DataProcessor)
     combined.file_path = None
     combined.df = pd.concat([proc_llg.df, proc_lmb.df], ignore_index=True)
@@ -114,15 +102,15 @@ def generate_report(tmp_dir):
         }
 
     # ── Traffic charts ────────────────────────────────────────────────────────
-    chart_4g         = os.path.join(tmp_dir, "chart_4g.png")
-    chart_sgi_peak   = os.path.join(tmp_dir, "chart_sgi_peak.png")
-    chart_gi         = os.path.join(tmp_dir, "chart_gi.png")
-    chart_gn         = os.path.join(tmp_dir, "chart_gn.png")
+    chart_4g       = os.path.join(tmp_dir, "chart_4g.png")
+    chart_sgi_peak = os.path.join(tmp_dir, "chart_sgi_peak.png")
+    chart_gi       = os.path.join(tmp_dir, "chart_gi.png")
+    chart_gn       = os.path.join(tmp_dir, "chart_gn.png")
 
-    processor.plot_kpi("4G Data traffic VDGW(CLOUD) (MB)",                        chart_4g)
+    processor.plot_kpi("4G Data traffic VDGW(CLOUD) (MB)",                               chart_4g)
     processor.plot_kpi("User Plane SGi downlink user traffic peak throughput in MB/s (MB/s)", chart_sgi_peak)
-    processor.plot_kpi("PGW-U 2/3G Gi traffic in MB (MB)",                        chart_gi)
-    processor.plot_kpi("PGW-U 2/3G Gn peak throughput in MB/s (MB/s)",            chart_gn)
+    processor.plot_kpi("PGW-U 2/3G Gi traffic in MB (MB)",                               chart_gi)
+    processor.plot_kpi("PGW-U 2/3G Gn peak throughput in MB/s (MB/s)",                   chart_gn)
 
     # ── USN CPU charts ────────────────────────────────────────────────────────
     cpu_cloudusn_path = os.path.join(tmp_dir, "cpu_cloudusn.png")
@@ -158,7 +146,12 @@ def generate_report(tmp_dir):
     cups_lmb_vdgw.load_data()
     cups_lmb_vdgw.plot_cpu_usage(cups_lmb_vdgw_path, "LMB vDGW01 CPU Usage")
 
-    # ── Alarms (real data from alarm_extractor) ───────────────────────────────
+    # ── Quick PDP KPI charts ──────────────────────────────────────────────────
+    print("[INFO] Generating Quick PDP KPI charts...")
+    cloud_chart, lmb_chart, pdp_chart = generate_pdp_charts(tmp_dir)
+    pdp_charts = [cloud_chart, lmb_chart, pdp_chart]
+
+    # ── Alarms ────────────────────────────────────────────────────────────────
     usn_cloudusn = AlarmProcessor("alarm_CLOUDUSN")
     usn_cloudusn.load_data()
 
@@ -201,6 +194,7 @@ def generate_report(tmp_dir):
             cups_llg_vcgw_path, cups_llg_vdgw_path,
             cups_lmb_vcgw_path, cups_lmb_vdgw_path
         ],
+        pdp_charts=pdp_charts,
         usn_alarms=usn_alarms,
         ugw_alarms=ugw_alarms,
     )
