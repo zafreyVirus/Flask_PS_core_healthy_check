@@ -4,6 +4,19 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
 
+# ── Real column names as they exist in the CSV ────────────────────────────────
+COL_SGI_DL       = "User Plane SGi downlink user traffic in MB"
+COL_SGI_UL       = "User Plane SGi uplink user traffic in MB"
+COL_SGI_DL_PEAK  = "User Plane SGi downlink user traffic peak throughput in MB/s"
+COL_SGI_UL_PEAK  = "User Plane SGi uplink user traffic peak throughput in MB/s"
+
+# ── Computed KPI names (created at load time) ─────────────────────────────────
+KPI_4G_TRAFFIC   = "4G Data traffic VDGW(CLOUD) (MB)"
+KPI_SGI_DL_PEAK  = "User Plane SGi downlink user traffic peak throughput in MB/s (MB/s)"
+KPI_GI_TRAFFIC   = "PGW-U 2/3G Gi traffic in MB (MB)"
+KPI_GN_PEAK      = "PGW-U 2/3G Gn peak throughput in MB/s (MB/s)"
+
+
 class DataProcessor:
 
     def __init__(self, file_path):
@@ -12,18 +25,33 @@ class DataProcessor:
 
     def load_data(self):
         """
-        Load real traffic CSV from /home/u2020/NBI_PM/pm/
-        Columns: Start Time, NE Name, User Plane SGi ... in MB
+        Load real traffic CSV and compute derived KPI columns.
+        Raw columns: Start Time, NE Name, SGi DL MB, SGi DL peak, SGi UL MB, SGi UL peak
         """
         self.df = pd.read_csv(self.file_path)
-
-        # Convert Start Time to datetime
         self.df["Start Time"] = pd.to_datetime(self.df["Start Time"])
+
+        dl = pd.to_numeric(self.df[COL_SGI_DL],      errors="coerce").fillna(0)
+        ul = pd.to_numeric(self.df[COL_SGI_UL],      errors="coerce").fillna(0)
+        dl_peak = pd.to_numeric(self.df[COL_SGI_DL_PEAK], errors="coerce").fillna(0)
+
+        # 4G Data traffic = SGi DL + SGi UL (total throughput)
+        self.df[KPI_4G_TRAFFIC] = (dl + ul).round(4)
+
+        # SGi DL peak — rename for consistency
+        self.df[KPI_SGI_DL_PEAK] = dl_peak.round(4)
+
+        # 2/3G Gi traffic = total SGi − S5/S8 (approximated as SGi UL only as proxy)
+        # Since we don't have S5/S8 in this file, use UL as the 2/3G component
+        self.df[KPI_GI_TRAFFIC] = ul.round(4)
+
+        # 2/3G Gn peak = SGi UL peak throughput
+        ul_peak = pd.to_numeric(self.df[COL_SGI_UL_PEAK], errors="coerce").fillna(0)
+        self.df[KPI_GN_PEAK] = ul_peak.round(4)
 
         return self.df
 
     def filter_by_date(self, start_date, end_date):
-        """Filter dataframe to the given date range."""
         mask = (
             (self.df["Start Time"] >= pd.to_datetime(start_date)) &
             (self.df["Start Time"] <= pd.to_datetime(end_date)
@@ -33,7 +61,6 @@ class DataProcessor:
         return self.df
 
     def pivot_kpi(self, column_name):
-        """Pivot so each NE becomes a column, indexed by Start Time."""
         pivot_df = self.df.pivot_table(
             index="Start Time",
             columns="NE Name",
@@ -43,19 +70,14 @@ class DataProcessor:
         return pivot_df.sort_index()
 
     def calculate_summary(self, column_name):
-        """Calculate max, min, avg and their timestamps per NE."""
         summary = {}
-
         for node in self.df["NE Name"].unique():
             node_df = self.df[self.df["NE Name"] == node].copy()
             node_df = node_df.dropna(subset=[column_name])
-
             if node_df.empty:
                 continue
-
             max_idx = node_df[column_name].idxmax()
             min_idx = node_df[column_name].idxmin()
-
             summary[node] = {
                 "max_value": node_df[column_name].max(),
                 "max_time":  node_df.loc[max_idx, "Start Time"],
@@ -63,11 +85,9 @@ class DataProcessor:
                 "min_time":  node_df.loc[min_idx, "Start Time"],
                 "avg_value": node_df[column_name].mean(),
             }
-
         return summary
 
     def plot_kpi(self, column_name, output_file):
-        """Generate KPI line chart per NE and save as image."""
         pivot = self.pivot_kpi(column_name)
 
         color_map = {
@@ -76,20 +96,13 @@ class DataProcessor:
         }
 
         plt.figure(figsize=(14, 6))
-
         for ne in pivot.columns:
             color = color_map.get(ne, "#007dff")
             plt.plot(
-                pivot.index,
-                pivot[ne],
-                color=color,
-                marker="o",
-                linewidth=2,
-                markersize=6,
-                markerfacecolor="white",
-                markeredgecolor=color,
-                markeredgewidth=2,
-                label=ne,
+                pivot.index, pivot[ne],
+                color=color, marker="o", linewidth=2, markersize=6,
+                markerfacecolor="white", markeredgecolor=color,
+                markeredgewidth=2, label=ne,
             )
 
         plt.title(column_name)
