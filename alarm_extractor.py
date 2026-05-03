@@ -28,6 +28,9 @@ FILTERS = {
     "alarm_LMB_vDGW": ("LMB_vDGW01", "vUGW"),
 }
 
+# How many days back to keep alarms
+DAYS_TO_KEEP = 7
+
 # Unique alarm key columns
 KEY_COLS = ["Alarm ID", "Alarm Source"]
 
@@ -56,6 +59,36 @@ def make_key(row):
     """Create a unique string key from Alarm ID + Alarm Source."""
     return f"{str(row.get('Alarm ID', '')).strip()}|{str(row.get('Alarm Source', '')).strip()}"
 
+
+
+def filter_by_date(df, days=DAYS_TO_KEEP):
+    """
+    Filter alarm DataFrame to only keep rows where OccurrenceTime
+    is within the last `days` days from now.
+    Handles format: "2026/1/27 02:00:10 GMT+02:00"
+    Rows with unparseable dates are kept (safe default).
+    """
+    if "OccurrenceTime" not in df.columns:
+        return df
+
+    cutoff = pd.Timestamp.now() - pd.Timedelta(days=days)
+
+    def parse_time(val):
+        try:
+            # Strip timezone string e.g. " GMT+02:00" before parsing
+            clean = str(val).split(" GMT")[0].strip()
+            return pd.to_datetime(clean, format="%Y/%m/%d %H:%M:%S")
+        except Exception:
+            return None
+
+    parsed = df["OccurrenceTime"].apply(parse_time)
+    # Keep rows within window OR rows where date could not be parsed
+    mask = parsed.isna() | (parsed >= cutoff)
+    filtered = df[mask].copy()
+    dropped = len(df) - len(filtered)
+    if dropped > 0:
+        print(f"    [DATE FILTER] Dropped {dropped} alarm(s) older than {days} days")
+    return filtered
 
 # ─── File helpers ─────────────────────────────────────────────────────────────
 
@@ -97,6 +130,7 @@ def load_existing(out_path):
         return {}
     try:
         df = pd.read_csv(out_path)
+        df = filter_by_date(df)  # drop alarms older than DAYS_TO_KEEP
         if df.empty or "Alarm ID" not in df.columns:
             return {}
         existing = {}
@@ -213,7 +247,7 @@ def main():
                             (df["Alarm Source"].astype(str).str.strip() == alarm_source) &
                             (df["NEType"].astype(str).str.strip() == ne_type)
                         )
-                        matched = df[mask]
+                        matched = filter_by_date(df[mask])
                         if not matched.empty:
                             new_data[key].append(matched)
 
