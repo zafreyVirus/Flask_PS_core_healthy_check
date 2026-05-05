@@ -1,4 +1,3 @@
-
 # from openpyxl import Workbook
 # from openpyxl.drawing.image import Image
 # from openpyxl.styles import PatternFill, Font, Alignment, Border, Side
@@ -86,7 +85,7 @@
 #     def create_report(
 #         self, traffic_charts, cpu_charts, health_report, output_file,
 #         cups_charts=None, usn_alarms=None, ugw_alarms=None,
-#         pdp_charts=None
+#         pdp_charts=None, license_summary=None
 #     ):
 #         wb = Workbook()
 
@@ -215,6 +214,59 @@
 #         if ugw_alarms:
 #             ws5 = wb.create_sheet("UGW Alarms")
 #             self._write_alarm_sheet(ws5, "UGW ALARMS REPORT", ugw_alarms)
+
+#         # ── License Grace Period table ────────────────────────────────────────────
+#         if license_summary:
+#             row += 3
+#             ws1[f"A{row}"] = "License Grace Period Summary"
+#             ws1[f"A{row}"].font = Font(bold=True, size=12, color="1F4E79")
+#             row += 1
+
+#             # Header
+#             for col_idx, header in enumerate(["Node", "Grace Period"], start=1):
+#                 cell = ws1.cell(row=row, column=col_idx, value=header)
+#                 cell.fill = HEADER_FILL
+#                 cell.font = HEADER_FONT
+#                 cell.border = THIN_BORDER
+#                 cell.alignment = Alignment(horizontal="center", vertical="center")
+#             row += 1
+
+#             for entry in license_summary:
+#                 days  = entry["remain_days"]
+#                 label = entry["grace_period"]
+
+#                 # Colour coding
+#                 if days is None:
+#                     fill_color = "D3D3D3"  # grey
+#                     font_color = "000000"
+#                 elif days < 14:
+#                     fill_color = "FF0000"  # red
+#                     font_color = "FFFFFF"
+#                 elif days <= 30:
+#                     fill_color = "FF8C00"  # orange
+#                     font_color = "FFFFFF"
+#                 else:
+#                     fill_color = "00B050"  # green
+#                     font_color = "FFFFFF"
+
+#                 # Node cell
+#                 node_cell = ws1.cell(row=row, column=1, value=entry["node"])
+#                 node_cell.border = THIN_BORDER
+#                 node_cell.font   = Font(bold=True)
+#                 node_cell.alignment = Alignment(vertical="center")
+
+#                 # Grace period cell
+#                 gp_cell = ws1.cell(row=row, column=2, value=label)
+#                 gp_cell.border    = THIN_BORDER
+#                 gp_cell.fill      = PatternFill(start_color=fill_color, end_color=fill_color, fill_type="solid")
+#                 gp_cell.font      = Font(bold=True, color=font_color)
+#                 gp_cell.alignment = Alignment(horizontal="center", vertical="center")
+
+#                 row += 1
+
+#             # Column widths for license table
+#             ws1.column_dimensions["A"].width = 18
+#             ws1.column_dimensions["B"].width = 28
 
 #         wb.save(output_file)
 
@@ -487,5 +539,55 @@ class ExcelReport:
             # Column widths for license table
             ws1.column_dimensions["A"].width = 18
             ws1.column_dimensions["B"].width = 28
+
+        # ── SHEET: License Summary ────────────────────────────────────────────────
+        if license_summary:
+            ws_lic = wb.create_sheet("License")
+            ws_lic["A1"] = "LICENSE GRACE PERIOD SUMMARY"
+            ws_lic["A1"].font = Font(bold=True, size=14)
+            ws_lic["A2"] = f"Author: {self.author}"
+
+            lic_row = 4
+
+            # Header
+            for col_idx, header in enumerate(["Node", "Grace Period"], start=1):
+                cell = ws_lic.cell(row=lic_row, column=col_idx, value=header)
+                cell.fill = HEADER_FILL
+                cell.font = HEADER_FONT
+                cell.border = THIN_BORDER
+                cell.alignment = Alignment(horizontal="center", vertical="center")
+            lic_row += 1
+
+            for entry in license_summary:
+                days      = entry.get("remain_days")
+                label     = entry["grace_period"]
+                permanent = entry.get("permanent", False)
+
+                # Text colour only — no background fill
+                if permanent:
+                    txt_color = "000000"  # black
+                elif days is None:
+                    txt_color = "888888"  # grey
+                elif days < 14:
+                    txt_color = "FF0000"  # red
+                elif days <= 30:
+                    txt_color = "FF8C00"  # orange
+                else:
+                    txt_color = "00B050"  # green
+
+                node_cell = ws_lic.cell(row=lic_row, column=1, value=entry["node"])
+                node_cell.border    = THIN_BORDER
+                node_cell.font      = Font(bold=True)
+                node_cell.alignment = Alignment(vertical="center")
+
+                gp_cell = ws_lic.cell(row=lic_row, column=2, value=label)
+                gp_cell.border    = THIN_BORDER
+                gp_cell.font      = Font(bold=True, color=txt_color)
+                gp_cell.alignment = Alignment(horizontal="center", vertical="center")
+
+                lic_row += 1
+
+            ws_lic.column_dimensions["A"].width = 18
+            ws_lic.column_dimensions["B"].width = 28
 
         wb.save(output_file)

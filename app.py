@@ -21,6 +21,7 @@
 # from emailer import EmailReport
 # from pdp_chart_generator import generate_pdp_charts
 # from get_cpu_util import get_latest_max_cpu, cpu_health_status
+# from license_checker import get_license_summary
 
 # app = Flask(__name__)
 
@@ -184,6 +185,10 @@
 #         ("LMB DGW Alarms (LMB_vDGW01)", lmb_vdgw_alarms.get_alarms()),
 #     ]
 
+#     # ── License summary ───────────────────────────────────────────────────────
+#     print("[INFO] Reading license grace periods...")
+#     license_data = get_license_summary()
+
 #     # ── Build Excel ───────────────────────────────────────────────────────────
 #     excel_path = os.path.join(tmp_dir, "PS_Core_Health_Report.xlsx")
 #     excel = ExcelReport("Fraser Msusa")
@@ -199,6 +204,7 @@
 #         pdp_charts=pdp_charts,
 #         usn_alarms=usn_alarms,
 #         ugw_alarms=ugw_alarms,
+#         license_summary=license_data,
 #     )
 
 #     return health_report, start_date, end_date, excel_path
@@ -490,7 +496,7 @@ def run_report_and_email():
 
         print("[INFO] Sending email...")
         emailer = EmailReport(sender_email, sender_password)
-        emailer.send_report(excel_path, health_report, start_date, end_date)
+        emailer.send_report(excel_path, health_report, start_date, end_date, license_data)
 
     print("[INFO] Done. Temp files cleaned up.")
     return start_date, end_date
