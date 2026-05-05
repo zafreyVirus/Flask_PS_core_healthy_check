@@ -236,7 +236,7 @@ class EmailReport:
                     license_summary=None):
         """Send the generated Excel report via email with an HTML summary body."""
 
-        recipient = os.environ.get("RECIPIENT_EMAIL", "fraser.msusa@tnm.co.mw")
+        recipient = os.environ.get("RECIPIENT_EMAIL", "msusafraser@gmail.com")
 
         msg = MIMEMultipart("mixed")
         msg["Subject"] = f"TNM PS Core Health Report — {start_date} to {end_date}"
