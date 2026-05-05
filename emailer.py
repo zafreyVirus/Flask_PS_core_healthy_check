@@ -168,14 +168,14 @@ class EmailReport:
             rows += f"""
             <tr>
                 <td style="padding:8px; border:1px solid #ddd;">{ne}</td>
-                <td style="padding:8px; border:1px solid #ddd;">{data['Peak Traffic (MB)']:,.2f}</td>
+                # <td style="padding:8px; border:1px solid #ddd;">{data['Peak Traffic (MB)']:,.2f}</td>
                 <td style="padding:8px; border:1px solid #ddd;">{data['Peak Time']}</td>
                 <td style="padding:8px; border:1px solid #ddd; text-align:center;
                            background-color:{color}; color:white; font-weight:bold;">
                     {cpu_display}
                 </td>
-                <td style="padding:8px; border:1px solid #ddd; color:{color};
-                           font-weight:bold;">{cpu_status}</td>
+                # <td style="padding:8px; border:1px solid #ddd; color:{color};
+                #            font-weight:bold;">{cpu_status}</td>
             </tr>
             """
 

@@ -149,35 +149,35 @@ class EmailReport:
         current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
         # ── Traffic / CPU summary rows ────────────────────────────────────────
-        rows = ""
-        for ne, data in health_report.items():
-            cpu_pct    = data.get("CPU Utilization %")
-            cpu_status = data.get("CPU Health Status", "UNKNOWN")
+        # rows = ""
+        # for ne, data in health_report.items():
+        #     cpu_pct    = data.get("CPU Utilization %")
+        #     cpu_status = data.get("CPU Health Status", "UNKNOWN")
 
-            if cpu_status == "HEALTHY":
-                color = "#28a745"
-            elif cpu_status == "WARNING":
-                color = "#ffc107"
-            elif cpu_status == "CRITICAL":
-                color = "#dc3545"
-            else:
-                color = "#aaaaaa"
+        #     if cpu_status == "HEALTHY":
+        #         color = "#28a745"
+        #     elif cpu_status == "WARNING":
+        #         color = "#ffc107"
+        #     elif cpu_status == "CRITICAL":
+        #         color = "#dc3545"
+        #     else:
+        #         color = "#aaaaaa"
 
-            cpu_display = f"{cpu_pct}%" if cpu_pct is not None else "N/A"
+        #     cpu_display = f"{cpu_pct}%" if cpu_pct is not None else "N/A"
 
-            rows += f"""
-            <tr>
-                <td style="padding:8px; border:1px solid #ddd;">{ne}</td>
-                <td style="padding:8px; border:1px solid #ddd;">{data['Peak Traffic (MB)']:,.2f}</td>
-                <td style="padding:8px; border:1px solid #ddd;">{data['Peak Time']}</td>
-                <td style="padding:8px; border:1px solid #ddd; text-align:center;
-                           background-color:{color}; color:white; font-weight:bold;">
-                    {cpu_display}
-                </td>
-                <td style="padding:8px; border:1px solid #ddd; color:{color};
-                           font-weight:bold;">{cpu_status}</td>
-            </tr>
-            """
+        #     rows += f"""
+        #     <tr>
+        #         <td style="padding:8px; border:1px solid #ddd;">{ne}</td>
+        #         <td style="padding:8px; border:1px solid #ddd;">{data['Peak Traffic (MB)']:,.2f}</td>
+        #         <td style="padding:8px; border:1px solid #ddd;">{data['Peak Time']}</td>
+        #         <td style="padding:8px; border:1px solid #ddd; text-align:center;
+        #                    background-color:{color}; color:white; font-weight:bold;">
+        #             {cpu_display}
+        #         </td>
+        #         <td style="padding:8px; border:1px solid #ddd; color:{color};
+        #                    font-weight:bold;">{cpu_status}</td>
+        #     </tr>
+        #     """
 
         # ── License summary rows ──────────────────────────────────────────────
         license_rows = ""
@@ -210,20 +210,20 @@ class EmailReport:
             <p><strong>Report Period:</strong> {start_date} to {end_date}</p>
             <p><strong>Generated On:</strong> {current_time}</p>
 
-            <h3 style="color:#003366;">Traffic &amp; CPU Health Summary</h3>
-            <table border="0" cellpadding="0" cellspacing="0" width="100%"
-                   style="border-collapse:collapse; border:1px solid #ddd;">
-                <tr style="background-color:#003366; color:white;">
-                    <th style="padding:10px; text-align:left;">NE Name</th>
-                    <th style="padding:10px; text-align:left;">Peak Traffic (MB)</th>
-                    <th style="padding:10px; text-align:left;">Peak Time</th>
-                    <th style="padding:10px; text-align:center;">CPU Utilization %</th>
-                    <th style="padding:10px; text-align:left;">CPU Health Status</th>
-                </tr>
-                {rows}
-            </table>
+            # <h3 style="color:#003366;">Traffic &amp; CPU Health Summary</h3>
+            # <table border="0" cellpadding="0" cellspacing="0" width="100%"
+            #        style="border-collapse:collapse; border:1px solid #ddd;">
+            #     <tr style="background-color:#003366; color:white;">
+            #         <th style="padding:10px; text-align:left;">NE Name</th>
+            #         <th style="padding:10px; text-align:left;">Peak Traffic (MB)</th>
+            #         <th style="padding:10px; text-align:left;">Peak Time</th>
+            #         <th style="padding:10px; text-align:center;">CPU Utilization %</th>
+            #         <th style="padding:10px; text-align:left;">CPU Health Status</th>
+            #     </tr>
+            #     {rows}
+            # </table>
 
-            <br>
+            # <br>
 
             <h3 style="color:#003366;">License Grace Period Summary</h3>
             <table border="0" cellpadding="0" cellspacing="0" width="60%"
