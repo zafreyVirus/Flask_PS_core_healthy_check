@@ -1,3 +1,5 @@
+
+
 # import smtplib
 # import os
 # from email.mime.multipart import MIMEMultipart
@@ -6,47 +8,79 @@
 # from email import encoders
 # from datetime import datetime
 
+
 # class EmailReport:
 
 #     def __init__(self, sender_email, sender_password):
 #         self.sender_email = sender_email
 #         self.sender_password = sender_password
 
-#     def generate_html(self, health_report, start_date, end_date):
+#     def _license_color(self, entry):
+#         days      = entry.get("remain_days")
+#         permanent = entry.get("permanent", False)
+#         if permanent:
+#             return "#000000"
+#         if days is None:
+#             return "#888888"
+#         if days < 14:
+#             return "#dc3545"
+#         if days <= 30:
+#             return "#FF8C00"
+#         return "#28a745"
+
+#     def generate_html(self, health_report, start_date, end_date, license_summary=None):
 
 #         current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-#         rows = ""
 
-#         for ne, data in health_report.items():
+#         # ── Traffic / CPU summary rows ────────────────────────────────────────
+#         # rows = ""
+#         # for ne, data in health_report.items():
+#         #     cpu_pct    = data.get("CPU Utilization %")
+#         #     cpu_status = data.get("CPU Health Status", "UNKNOWN")
 
-#             cpu_pct    = data.get("CPU Utilization %")
-#             cpu_status = data.get("CPU Health Status", "UNKNOWN")
+#         #     if cpu_status == "HEALTHY":
+#         #         color = "#28a745"
+#         #     elif cpu_status == "WARNING":
+#         #         color = "#ffc107"
+#         #     elif cpu_status == "CRITICAL":
+#         #         color = "#dc3545"
+#         #     else:
+#         #         color = "#aaaaaa"
 
-#             if cpu_status == "HEALTHY":
-#                 color = "#28a745"
-#             elif cpu_status == "WARNING":
-#                 color = "#ffc107"
-#             elif cpu_status == "CRITICAL":
-#                 color = "#dc3545"
-#             else:
-#                 color = "#aaaaaa"
+#         #     cpu_display = f"{cpu_pct}%" if cpu_pct is not None else "N/A"
 
-#             cpu_display = f"{cpu_pct}%" if cpu_pct is not None else "N/A"
+#         #     rows += f"""
+#         #     <tr>
+#         #         <td style="padding:8px; border:1px solid #ddd;">{ne}</td>
+#         #         <td style="padding:8px; border:1px solid #ddd;">{data['Peak Traffic (MB)']:,.2f}</td>
+#         #         <td style="padding:8px; border:1px solid #ddd;">{data['Peak Time']}</td>
+#         #         <td style="padding:8px; border:1px solid #ddd; text-align:center;
+#         #                    background-color:{color}; color:white; font-weight:bold;">
+#         #             {cpu_display}
+#         #         </td>
+#         #         <td style="padding:8px; border:1px solid #ddd; color:{color};
+#         #                    font-weight:bold;">{cpu_status}</td>
+#         #     </tr>
+#         #     """
 
-#             rows += f"""
-#             <tr>
-#                 <td style="padding:8px; border:1px solid #ddd;">{ne}</td>
-#                 <td style="padding:8px; border:1px solid #ddd;">{data['Peak Traffic (MB)']:,.2f}</td>
-#                 <td style="padding:8px; border:1px solid #ddd;">{data['Peak Time']}</td>
-#                 <td style="padding:8px; border:1px solid #ddd; text-align:center;
-#                            background-color:{color}; color:white; font-weight:bold;">
-#                     {cpu_display}
-#                 </td>
-#                 <td style="padding:8px; border:1px solid #ddd; color:{color};
-#                            font-weight:bold;">{cpu_status}</td>
-#             </tr>
-#             """
+#         # ── License summary rows ──────────────────────────────────────────────
+#         license_rows = ""
+#         if license_summary:
+#             for entry in license_summary:
+#                 txt_color = self._license_color(entry)
+#                 license_rows += f"""
+#                 <tr>
+#                     <td style="padding:8px; border:1px solid #ddd; font-weight:bold;">
+#                         {entry['node']}
+#                     </td>
+#                     <td style="padding:8px; border:1px solid #ddd;
+#                                color:{txt_color}; font-weight:bold;">
+#                         {entry['grace_period']}
+#                     </td>
+#                 </tr>
+#                 """
 
+#         # ── HTML body ─────────────────────────────────────────────────────────
 #         html = f"""
 #         <html>
 #         <body style="font-family: Arial; color: #333;">
@@ -60,18 +94,15 @@
 #             <p><strong>Report Period:</strong> {start_date} to {end_date}</p>
 #             <p><strong>Generated On:</strong> {current_time}</p>
 
-#             <h3 style="color:#003366;">Traffic Health Summary</h3>
 
-#             <table border="0" cellpadding="0" cellspacing="0" width="100%"
+#             <h3 style="color:#003366;">License Grace Period Summary</h3>
+#             <table border="0" cellpadding="0" cellspacing="0" width="60%"
 #                    style="border-collapse:collapse; border:1px solid #ddd;">
 #                 <tr style="background-color:#003366; color:white;">
-#                     <th style="padding:10px; text-align:left;">NE Name</th>
-#                     <th style="padding:10px; text-align:left;">Peak Traffic (MB)</th>
-#                     <th style="padding:10px; text-align:left;">Peak Time</th>
-#                     <th style="padding:10px; text-align:center;">CPU Utilization %</th>
-#                     <th style="padding:10px; text-align:left;">CPU Health Status</th>
+#                     <th style="padding:10px; text-align:left;">Node</th>
+#                     <th style="padding:10px; text-align:left;">Grace Period</th>
 #                 </tr>
-#                 {rows}
+#                 {license_rows if license_rows else '<tr><td colspan="2" style="padding:8px; color:#888;">No license data available.</td></tr>'}
 #             </table>
 
 #             <br>
@@ -83,10 +114,10 @@
 #         </body>
 #         </html>
 #         """
-
 #         return html
 
-#     def send_report(self, attachment_path, health_report, start_date, end_date):
+#     def send_report(self, attachment_path, health_report, start_date, end_date,
+#                     license_summary=None):
 #         """Send the generated Excel report via email with an HTML summary body."""
 
 #         recipient = os.environ.get("RECIPIENT_EMAIL", "msusafraser@gmail.com")
@@ -96,7 +127,8 @@
 #         msg["From"]    = self.sender_email
 #         msg["To"]      = recipient
 
-#         html_content = self.generate_html(health_report, start_date, end_date)
+#         html_content = self.generate_html(
+#             health_report, start_date, end_date, license_summary)
 #         msg.attach(MIMEText(html_content, "html"))
 
 #         with open(attachment_path, "rb") as f:
@@ -118,12 +150,160 @@
 
 import smtplib
 import os
+import re
+import pandas as pd
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.mime.base import MIMEBase
 from email import encoders
 from datetime import datetime
 
+FM_DIR = "/home/u2020/NBI_FM"
+PM_DIR = "/home/u2020/NBI_PM/pm"
+
+# All alarm files to count severities from
+ALARM_FILES = [
+    "alarm_CLOUDUSN.csv",
+    "alarm_LMB_vUSN.csv",
+    "alarm_LLG_vCGW.csv",
+    "alarm_LLG_vDGW.csv",
+    "alarm_LMB_vCGW.csv",
+    "alarm_LMB_vDGW.csv",
+]
+
+# CPU files mapped to friendly node names
+CPU_FILES = {
+    "LLG vUSN":  os.path.join(PM_DIR, "cloudusn.csv"),
+    "LMB vUSN":  os.path.join(PM_DIR, "lmb_vusn.csv"),
+    "LLG vCGW":  os.path.join(PM_DIR, "llg_vcgw.csv"),
+    "LLG vDGW":  os.path.join(PM_DIR, "llg_vdgw.csv"),
+    "LMB vCGW":  os.path.join(PM_DIR, "lmb_vcgw.csv"),
+    "LMB vDGW":  os.path.join(PM_DIR, "lmb_vdgw.csv"),
+}
+
+
+# ─── Helpers ──────────────────────────────────────────────────────────────────
+
+def get_greeting():
+    hour = datetime.now().hour
+    if hour < 12:
+        return "Good morning"
+    elif hour < 17:
+        return "Good afternoon"
+    else:
+        return "Good evening"
+
+
+def format_date_human(date_str):
+    """Convert '2026-05-05' to '5th May 2026'."""
+    try:
+        dt = pd.to_datetime(date_str)
+        day = dt.day
+        suffix = "th" if 11 <= day <= 13 else {1:"st", 2:"nd", 3:"rd"}.get(day % 10, "th")
+        return dt.strftime(f"%-d{suffix} %B %Y")
+    except Exception:
+        return date_str
+
+
+def count_alarms():
+    """Count total Critical and Major alarms across all node alarm files."""
+    critical = 0
+    major    = 0
+
+    for filename in ALARM_FILES:
+        filepath = os.path.join(FM_DIR, filename)
+        if not os.path.exists(filepath) or os.path.getsize(filepath) == 0:
+            continue
+        try:
+            df = pd.read_csv(filepath)
+            if "Severity" not in df.columns:
+                continue
+            sev = df["Severity"].astype(str).str.strip().str.lower()
+            critical += (sev == "critical").sum()
+            major    += (sev == "major").sum()
+        except Exception:
+            continue
+
+    return int(critical), int(major)
+
+
+def get_cpu_range():
+    """
+    For each node get the highest VM CPU at the latest timestamp.
+    Then return the lowest and highest from that comparison.
+    Returns (low_pct, low_node, high_pct, high_node) or None if no data.
+    """
+    node_max_cpu = {}
+
+    for node_label, filepath in CPU_FILES.items():
+        if not os.path.exists(filepath) or os.path.getsize(filepath) == 0:
+            continue
+        try:
+            df = pd.read_csv(filepath)
+            df["Result Time"] = pd.to_datetime(df["Result Time"])
+            df["CPU max usage"] = pd.to_numeric(df["CPU max usage"], errors="coerce")
+            df = df.dropna(subset=["CPU max usage"])
+            if df.empty:
+                continue
+            latest = df["Result Time"].max()
+            latest_df = df[df["Result Time"] == latest]
+            node_max_cpu[node_label] = float(latest_df["CPU max usage"].max())
+        except Exception:
+            continue
+
+    if not node_max_cpu:
+        return None
+
+    high_node = max(node_max_cpu, key=node_max_cpu.get)
+    low_node  = min(node_max_cpu, key=node_max_cpu.get)
+
+    return (
+        round(node_max_cpu[low_node],  1),
+        low_node,
+        round(node_max_cpu[high_node], 1),
+        high_node,
+    )
+
+
+def build_license_summary_text(license_summary):
+    """Build a readable license highlights sentence."""
+    if not license_summary:
+        return "No license data available."
+
+    # Group nodes by grace period
+    groups = {}
+    permanent = []
+
+    for entry in license_summary:
+        if entry.get("permanent"):
+            permanent.append(entry["node"])
+        elif entry["remain_days"] is not None:
+            days = entry["remain_days"]
+            groups.setdefault(days, []).append(entry["node"])
+
+    parts = []
+    for days in sorted(groups.keys()):
+        nodes = groups[days]
+        node_str = ", ".join(nodes)
+        parts.append(f"{node_str} — {days}-day grace period")
+
+    if permanent:
+        parts.append(f"{', '.join(permanent)} — Permanent")
+
+    return ". ".join(parts) + "." if parts else "No license alarms found."
+
+
+def license_color(entry):
+    days      = entry.get("remain_days")
+    permanent = entry.get("permanent", False)
+    if permanent:      return "#000000"
+    if days is None:   return "#888888"
+    if days < 14:      return "#dc3545"
+    if days <= 30:     return "#FF8C00"
+    return "#28a745"
+
+
+# ─── Main email class ─────────────────────────────────────────────────────────
 
 class EmailReport:
 
@@ -131,86 +311,87 @@ class EmailReport:
         self.sender_email = sender_email
         self.sender_password = sender_password
 
-    def _license_color(self, entry):
-        days      = entry.get("remain_days")
-        permanent = entry.get("permanent", False)
-        if permanent:
-            return "#000000"
-        if days is None:
-            return "#888888"
-        if days < 14:
-            return "#dc3545"
-        if days <= 30:
-            return "#FF8C00"
-        return "#28a745"
-
     def generate_html(self, health_report, start_date, end_date, license_summary=None):
 
-        current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        greeting     = get_greeting()
+        date_human   = format_date_human(end_date)
+        critical_cnt, major_cnt = count_alarms()
+        cpu_range    = get_cpu_range()
+        license_text = build_license_summary_text(license_summary)
 
-        # ── Traffic / CPU summary rows ────────────────────────────────────────
-        # rows = ""
-        # for ne, data in health_report.items():
-        #     cpu_pct    = data.get("CPU Utilization %")
-        #     cpu_status = data.get("CPU Health Status", "UNKNOWN")
+        # ── Alarm highlight text ──────────────────────────────────────────────
+        if critical_cnt == 0 and major_cnt == 0:
+            alarm_text = "No critical or major alarms at this time."
+        else:
+            parts = []
+            if critical_cnt:
+                parts.append(f"<strong>{critical_cnt}</strong> critical alarm{'s' if critical_cnt > 1 else ''}")
+            if major_cnt:
+                parts.append(f"<strong>{major_cnt}</strong> major alarm{'s' if major_cnt > 1 else ''}")
+            alarm_text = f"{' and '.join(parts)} across all nodes."
 
-        #     if cpu_status == "HEALTHY":
-        #         color = "#28a745"
-        #     elif cpu_status == "WARNING":
-        #         color = "#ffc107"
-        #     elif cpu_status == "CRITICAL":
-        #         color = "#dc3545"
-        #     else:
-        #         color = "#aaaaaa"
+        # ── CPU highlight text ────────────────────────────────────────────────
+        if cpu_range:
+            low_pct, low_node, high_pct, high_node = cpu_range
+            cpu_text = (
+                f"CPU usage ranges from <strong>{low_pct}%</strong> ({low_node}) "
+                f"to <strong>{high_pct}%</strong> ({high_node})."
+            )
+        else:
+            cpu_text = "CPU data not available."
 
-        #     cpu_display = f"{cpu_pct}%" if cpu_pct is not None else "N/A"
-
-        #     rows += f"""
-        #     <tr>
-        #         <td style="padding:8px; border:1px solid #ddd;">{ne}</td>
-        #         <td style="padding:8px; border:1px solid #ddd;">{data['Peak Traffic (MB)']:,.2f}</td>
-        #         <td style="padding:8px; border:1px solid #ddd;">{data['Peak Time']}</td>
-        #         <td style="padding:8px; border:1px solid #ddd; text-align:center;
-        #                    background-color:{color}; color:white; font-weight:bold;">
-        #             {cpu_display}
-        #         </td>
-        #         <td style="padding:8px; border:1px solid #ddd; color:{color};
-        #                    font-weight:bold;">{cpu_status}</td>
-        #     </tr>
-        #     """
-
-        # ── License summary rows ──────────────────────────────────────────────
+        # ── License table rows ────────────────────────────────────────────────
         license_rows = ""
         if license_summary:
             for entry in license_summary:
-                txt_color = self._license_color(entry)
+                color = license_color(entry)
                 license_rows += f"""
                 <tr>
                     <td style="padding:8px; border:1px solid #ddd; font-weight:bold;">
                         {entry['node']}
                     </td>
                     <td style="padding:8px; border:1px solid #ddd;
-                               color:{txt_color}; font-weight:bold;">
+                               color:{color}; font-weight:bold;">
                         {entry['grace_period']}
                     </td>
                 </tr>
                 """
 
-        # ── HTML body ─────────────────────────────────────────────────────────
+        # ── HTML ──────────────────────────────────────────────────────────────
         html = f"""
         <html>
-        <body style="font-family: Arial; color: #333;">
+        <body style="font-family: Arial; color: #333; line-height: 1.6;">
 
         <div style="text-align:center; background-color:#003366; padding:20px; color:white;">
             <h2 style="margin:0;">TNM - Core Network</h2>
-            <h3 style="margin:5px 0 0 0;">PS Core Health Report</h3>
+            <h3 style="margin:5px 0 0 0;">PS Core Health Check Report</h3>
         </div>
 
-        <div style="padding:20px;">
-            <p><strong>Report Period:</strong> {start_date} to {end_date}</p>
-            <p><strong>Generated On:</strong> {current_time}</p>
+        <div style="padding:24px;">
 
+            <p>{greeting},</p>
 
+            <p>Please find the attached PS Core Health Check report for today,
+               <strong>{date_human}</strong>.</p>
+
+            <p><strong>Here are the Key Highlights:</strong></p>
+
+            <ul style="line-height:2;">
+                <li>
+                    <strong>KPIs:</strong> All KPIs are within expected range.
+                </li>
+                <li>
+                    <strong>Licenses:</strong> {license_text}
+                </li>
+                <li>
+                    <strong>Alarms:</strong> {alarm_text}
+                </li>
+                <li>
+                    <strong>CPU Usage:</strong> {cpu_text}
+                </li>
+            </ul>
+
+            <br>
             <h3 style="color:#003366;">License Grace Period Summary</h3>
             <table border="0" cellpadding="0" cellspacing="0" width="60%"
                    style="border-collapse:collapse; border:1px solid #ddd;">
@@ -218,7 +399,8 @@ class EmailReport:
                     <th style="padding:10px; text-align:left;">Node</th>
                     <th style="padding:10px; text-align:left;">Grace Period</th>
                 </tr>
-                {license_rows if license_rows else '<tr><td colspan="2" style="padding:8px; color:#888;">No license data available.</td></tr>'}
+                {license_rows if license_rows else
+                 '<tr><td colspan="2" style="padding:8px; color:#888;">No license data.</td></tr>'}
             </table>
 
             <br>
@@ -234,12 +416,11 @@ class EmailReport:
 
     def send_report(self, attachment_path, health_report, start_date, end_date,
                     license_summary=None):
-        """Send the generated Excel report via email with an HTML summary body."""
 
         recipient = os.environ.get("RECIPIENT_EMAIL", "msusafraser@gmail.com")
 
         msg = MIMEMultipart("mixed")
-        msg["Subject"] = f"TNM PS Core Health Report — {start_date} to {end_date}"
+        msg["Subject"] = f"TNM PS Core Health Report — {format_date_human(end_date)}"
         msg["From"]    = self.sender_email
         msg["To"]      = recipient
 
