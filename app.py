@@ -20,6 +20,7 @@
 # from excel_report import ExcelReport
 # from emailer import EmailReport
 # from pdp_chart_generator import generate_pdp_charts
+# from get_cpu_util import get_latest_max_cpu, cpu_health_status
 
 # app = Flask(__name__)
 
@@ -90,15 +91,16 @@
 
 #     health_report = {}
 #     for ne, stats in summary.items():
-#         utilization, status = evaluate_health(stats["max_value"], CAPACITY_MB)
+#         cpu_pct    = get_latest_max_cpu(ne)
+#         cpu_status = cpu_health_status(cpu_pct)
 #         health_report[ne] = {
 #             "Peak Traffic (MB)":    float(stats["max_value"]),
 #             "Peak Time":            str(stats["max_time"]),
 #             "Minimum Traffic (MB)": float(stats["min_value"]),
 #             "Minimum Time":         str(stats["min_time"]),
 #             "Average Traffic (MB)": round(float(stats["avg_value"]), 2),
-#             "Utilization %":        utilization,
-#             "Health Status":        status,
+#             "CPU Utilization %":    cpu_pct,
+#             "CPU Health Status":    cpu_status,
 #         }
 
 #     # ── Traffic charts ────────────────────────────────────────────────────────
@@ -284,6 +286,7 @@ from excel_report import ExcelReport
 from emailer import EmailReport
 from pdp_chart_generator import generate_pdp_charts
 from get_cpu_util import get_latest_max_cpu, cpu_health_status
+from license_checker import get_license_summary
 
 app = Flask(__name__)
 
@@ -447,6 +450,10 @@ def generate_report(tmp_dir):
         ("LMB DGW Alarms (LMB_vDGW01)", lmb_vdgw_alarms.get_alarms()),
     ]
 
+    # ── License summary ───────────────────────────────────────────────────────
+    print("[INFO] Reading license grace periods...")
+    license_data = get_license_summary()
+
     # ── Build Excel ───────────────────────────────────────────────────────────
     excel_path = os.path.join(tmp_dir, "PS_Core_Health_Report.xlsx")
     excel = ExcelReport("Fraser Msusa")
@@ -462,6 +469,7 @@ def generate_report(tmp_dir):
         pdp_charts=pdp_charts,
         usn_alarms=usn_alarms,
         ugw_alarms=ugw_alarms,
+        license_summary=license_data,
     )
 
     return health_report, start_date, end_date, excel_path

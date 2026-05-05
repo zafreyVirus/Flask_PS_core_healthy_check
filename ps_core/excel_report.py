@@ -1,3 +1,4 @@
+
 # from openpyxl import Workbook
 # from openpyxl.drawing.image import Image
 # from openpyxl.styles import PatternFill, Font, Alignment, Border, Side
@@ -107,7 +108,7 @@
 #         row += 2
 #         headers = ["NE", "Peak Traffic (MB)", "Peak Time",
 #                    "Min Traffic (MB)", "Min Time",
-#                    "Average (MB)", "Utilization %", "Health Status"]
+#                    "Average (MB)", "CPU Utilization %"]
 #         for col_idx, h in enumerate(headers, start=1):
 #             cell = ws1.cell(row=row, column=col_idx, value=h)
 #             cell.fill = HEADER_FILL
@@ -120,9 +121,12 @@
 #             "HEALTHY":  PatternFill(start_color="00B050", end_color="00B050", fill_type="solid"),
 #             "WARNING":  PatternFill(start_color="FFC000", end_color="FFC000", fill_type="solid"),
 #             "CRITICAL": PatternFill(start_color="FF0000", end_color="FF0000", fill_type="solid"),
+#             "UNKNOWN":  PatternFill(start_color="D3D3D3", end_color="D3D3D3", fill_type="solid"),
 #         }
 
 #         for ne, stats in health_report.items():
+#             cpu_pct    = stats.get("CPU Utilization %")
+#             cpu_status = stats.get("CPU Health Status", "UNKNOWN")
 #             values = [
 #                 ne,
 #                 stats["Peak Traffic (MB)"],
@@ -130,15 +134,14 @@
 #                 stats["Minimum Traffic (MB)"],
 #                 str(stats["Minimum Time"]),
 #                 stats["Average Traffic (MB)"],
-#                 stats["Utilization %"],
-#                 stats["Health Status"],
+#                 f"{cpu_pct}%" if cpu_pct is not None else "N/A",
 #             ]
 #             for col_idx, val in enumerate(values, start=1):
 #                 cell = ws1.cell(row=row, column=col_idx, value=val)
 #                 cell.border = THIN_BORDER
 #                 cell.alignment = Alignment(vertical="center")
-#                 if col_idx == 8:  # Health Status column
-#                     status = str(val).strip().upper()
+#                 if col_idx == 7:  # CPU Utilization % column
+#                     status = cpu_status.strip().upper()
 #                     if status in STATUS_FILLS:
 #                         cell.fill = STATUS_FILLS[status]
 #                         cell.font = Font(bold=True, color="FFFFFF")
@@ -302,7 +305,7 @@ class ExcelReport:
     def create_report(
         self, traffic_charts, cpu_charts, health_report, output_file,
         cups_charts=None, usn_alarms=None, ugw_alarms=None,
-        pdp_charts=None
+        pdp_charts=None, license_summary=None
     ):
         wb = Workbook()
 
@@ -431,5 +434,58 @@ class ExcelReport:
         if ugw_alarms:
             ws5 = wb.create_sheet("UGW Alarms")
             self._write_alarm_sheet(ws5, "UGW ALARMS REPORT", ugw_alarms)
+
+        # ── License Grace Period table ────────────────────────────────────────────
+        if license_summary:
+            row += 3
+            ws1[f"A{row}"] = "License Grace Period Summary"
+            ws1[f"A{row}"].font = Font(bold=True, size=12, color="1F4E79")
+            row += 1
+
+            # Header
+            for col_idx, header in enumerate(["Node", "Grace Period"], start=1):
+                cell = ws1.cell(row=row, column=col_idx, value=header)
+                cell.fill = HEADER_FILL
+                cell.font = HEADER_FONT
+                cell.border = THIN_BORDER
+                cell.alignment = Alignment(horizontal="center", vertical="center")
+            row += 1
+
+            for entry in license_summary:
+                days  = entry["remain_days"]
+                label = entry["grace_period"]
+
+                # Colour coding
+                if days is None:
+                    fill_color = "D3D3D3"  # grey
+                    font_color = "000000"
+                elif days < 14:
+                    fill_color = "FF0000"  # red
+                    font_color = "FFFFFF"
+                elif days <= 30:
+                    fill_color = "FF8C00"  # orange
+                    font_color = "FFFFFF"
+                else:
+                    fill_color = "00B050"  # green
+                    font_color = "FFFFFF"
+
+                # Node cell
+                node_cell = ws1.cell(row=row, column=1, value=entry["node"])
+                node_cell.border = THIN_BORDER
+                node_cell.font   = Font(bold=True)
+                node_cell.alignment = Alignment(vertical="center")
+
+                # Grace period cell
+                gp_cell = ws1.cell(row=row, column=2, value=label)
+                gp_cell.border    = THIN_BORDER
+                gp_cell.fill      = PatternFill(start_color=fill_color, end_color=fill_color, fill_type="solid")
+                gp_cell.font      = Font(bold=True, color=font_color)
+                gp_cell.alignment = Alignment(horizontal="center", vertical="center")
+
+                row += 1
+
+            # Column widths for license table
+            ws1.column_dimensions["A"].width = 18
+            ws1.column_dimensions["B"].width = 28
 
         wb.save(output_file)
