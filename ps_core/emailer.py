@@ -279,17 +279,30 @@ class EmailReport:
     def send_report(self, attachment_path, health_report, start_date, end_date,
                     license_summary=None):
 
-        recipient = os.environ.get("RECIPIENT_EMAIL", "msusafraser@gmail.com")
+        # ── Recipients ────────────────────────────────────────────────────────
+        to_str  = os.environ.get("TO_RECIPIENTS", "")
+        cc_str  = os.environ.get("CC_RECIPIENTS", "")
 
+        to_list  = [e.strip() for e in to_str.split(",")  if e.strip()]
+        cc_list  = [e.strip() for e in cc_str.split(",")  if e.strip()]
+        all_recipients = to_list + cc_list
+
+        if not all_recipients:
+            raise ValueError("No recipients configured. Set TO_RECIPIENTS in .env")
+
+        # ── Build message ─────────────────────────────────────────────────────
         msg = MIMEMultipart("mixed")
         msg["Subject"] = f"TNM PS Core Health Report — {format_date_human(end_date)}"
         msg["From"]    = self.sender_email
-        msg["To"]      = recipient
+        msg["To"]      = ", ".join(to_list)
+        if cc_list:
+            msg["Cc"]  = ", ".join(cc_list)
 
         html_content = self.generate_html(
             health_report, start_date, end_date, license_summary)
         msg.attach(MIMEText(html_content, "html"))
 
+        # ── Attach Excel ──────────────────────────────────────────────────────
         with open(attachment_path, "rb") as f:
             part = MIMEBase("application", "octet-stream")
             part.set_payload(f.read())
@@ -301,8 +314,14 @@ class EmailReport:
         )
         msg.attach(part)
 
-        with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
+        # ── Send via Office365 SMTP with TLS ──────────────────────────────────
+        with smtplib.SMTP("smtp.office365.com", 587) as server:
+            server.ehlo()
+            server.starttls()
+            server.ehlo()
             server.login(self.sender_email, self.sender_password)
-            server.sendmail(self.sender_email, recipient, msg.as_string())
+            server.sendmail(self.sender_email, all_recipients, msg.as_string())
 
-        print(f"Email sent successfully to {recipient}")
+        print(f"Email sent to: {', '.join(to_list)}")
+        if cc_list:
+            print(f"CC: {', '.join(cc_list)}")
